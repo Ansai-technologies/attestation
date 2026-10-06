@@ -55,7 +55,7 @@ export interface AttestationStore {
   getById(id: string): Promise<Attestation | null>;
   findByTransactionCode(code: string): Promise<Attestation[]>;
   findOpenByOrderRef(orderRef: string): Promise<Attestation | null>;
-  updateStatus(id: string, patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">): Promise<Attestation | null>;
+  updateStatus(id: string, patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence" | "signature" | "hash">): Promise<Attestation | null>;
   registerWebhook(reg: WebhookRegistration): Promise<void>;
   listWebhooks(): Promise<WebhookRegistration[]>;
 }
@@ -112,11 +112,18 @@ export class SupabaseStore implements AttestationStore {
 
   async updateStatus(
     id: string,
-    patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">,
+    patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence" | "signature" | "hash">,
   ): Promise<Attestation | null> {
     const { data, error } = await this.client
       .from("attestations")
-      .update({ status: patch.status, reason_code: patch.reasonCode, reason: patch.reason, evidence: patch.evidence })
+      .update({
+        status: patch.status,
+        reason_code: patch.reasonCode,
+        reason: patch.reason,
+        evidence: patch.evidence,
+        signature: patch.signature,
+        hash: patch.hash,
+      })
       .eq("id", id)
       .select("*")
       .maybeSingle();
@@ -161,7 +168,7 @@ export class InMemoryStore implements AttestationStore {
   }
   async updateStatus(
     id: string,
-    patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">,
+    patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence" | "signature" | "hash">,
   ): Promise<Attestation | null> {
     const att = this.atts.get(id);
     if (!att) return null;

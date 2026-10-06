@@ -11,10 +11,21 @@ const EVENTS: WebhookEvent[] = ["attestation.completed", "attestation.failed"];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "method not allowed" });
+
+  // Fail closed: an unauthenticated registration endpoint lets anyone point
+  // our dispatcher (and attestation payloads) at their own server.
+  const adminSecret = process.env.WEBHOOK_ADMIN_SECRET;
+  if (!adminSecret) {
+    return res.status(503).json({ error: "webhook registration is disabled (WEBHOOK_ADMIN_SECRET not configured)" });
+  }
+  if (req.headers.authorization !== `Bearer ${adminSecret}`) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
   const { url, events } = (req.body ?? {}) as { url?: unknown; events?: unknown };
 
-  if (typeof url !== "string" || !/^https?:\/\/\S+$/.test(url)) {
-    return res.status(400).json({ error: "url must be an http(s) URL" });
+  if (typeof url !== "string" || !url.trim()) {
+    return res.status(400).json({ error: "url is required" });
   }
   const evts = Array.isArray(events) ? events : [];
   if (evts.length === 0 || !evts.every((e) => EVENTS.includes(e))) {

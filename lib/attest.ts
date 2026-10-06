@@ -47,3 +47,36 @@ export async function issueAttestation(
   await store.insert(attestation, subject);
   return attestation;
 }
+
+/**
+ * Rebuild a mutated attestation with a fresh signature + chain hash.
+ *
+ * A tamper-evident log must never keep a stale signature: after the C2B
+ * callback completes a pending attestation (new status/reason/evidence),
+ * the old signature would fail verifyAttestation. The entry keeps its id,
+ * signedAt and prevHash; signature and hash are recomputed over the new
+ * payload.
+ *
+ * v0.1 caveat: if a successor entry was already chained onto the old hash
+ * in the (short) window between issuance and completion, its prevHash
+ * dangles. Completions land seconds after issuance in practice; append-only
+ * completions (a new superseding entry instead of a mutation) are the v0.2
+ * direction if this ever matters.
+ */
+export function resignAttestation(
+  current: Attestation,
+  patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">,
+): Attestation {
+  const base: Omit<Attestation, "signature" | "hash"> = {
+    id: current.id,
+    type: current.type,
+    status: patch.status,
+    reasonCode: patch.reasonCode,
+    reason: patch.reason,
+    evidence: patch.evidence,
+    signedAt: current.signedAt,
+    prevHash: current.prevHash,
+  };
+  const canonical = signablePayload(base);
+  return { ...base, signature: signCanonical(canonical), hash: chainHash(current.prevHash, canonical) };
+}

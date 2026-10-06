@@ -61,6 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     throw e;
   }
 
+  try {
   // --- identity: v0.2 ---
   if (type === "identity") {
     return bad(res, 501, "identity attestation is not implemented in v0.1 (lands in v0.2)");
@@ -209,5 +210,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
     return res.status(201).json(att);
+  } catch (e) {
+    // Never fail as an opaque Vercel crash page: surface the real error as JSON.
+    console.error('POST /attestations failed:', e);
+    return bad(res, 500, e instanceof Error ? e.message : 'internal error');
   }
 }

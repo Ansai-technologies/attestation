@@ -210,6 +210,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
     return res.status(201).json(att);
+    }
   } catch (e) {
     // Never fail as an opaque Vercel crash page: surface the real error as JSON.
     console.error('POST /attestations failed:', e);

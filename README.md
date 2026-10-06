@@ -47,8 +47,9 @@ console.log(k.privateKey.export({type:'pkcs8',format:'pem'}));
 console.log(k.publicKey.export({type:'spki',format:'pem'}));"
 ```
 
-Run migrations: `supabase/migrations/001_attestations.sql` in the Supabase
-SQL editor (project TBD — see open items below).
+Run `supabase/migrations/001_attestations.sql` followed by
+`supabase/migrations/002_enable_rls.sql` in the Supabase SQL editor (project TBD
+— see open items below).
 
 ## Tests
 

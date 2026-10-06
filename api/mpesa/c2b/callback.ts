@@ -3,16 +3,30 @@
  *
  * A payment is real iff Safaricom announced it. This handler matches the
  * confirmation to the open (pending) payment attestation by
- * BillRefNumber/orderRef + amount, completes it, and dispatches webhooks.
+ * BillRefNumber/orderRef + amount, completes it (re-signing the attestation
+ * so its signature stays valid), and dispatches webhooks.
+ *
+ * Source authentication: when MPESA_CALLBACK_ALLOWLIST is configured
+ * (comma-separated IPs/CIDRs), only callers inside it are accepted; anyone
+ * else gets 403. A forged caller is not Safaricom, so the "never 4xx the
+ * operator" rule does not apply to them. When the allowlist is empty the
+ * check is skipped with a warning (sandbox convenience — set it in
+ * production).
+ *
+ * Field names follow Daraja's C2B payload exactly:
+ * TransID / TransTime / TransAmount / BillRefNumber / BusinessShortCode / MSISDN.
  *
  * Always answers Safaricom with {"ResultCode":0,"ResultDesc":"Accepted"} on
- * a parseable payload — we never 4xx the network operator; mismatches are
- * recorded as unverified attestations, not transport errors.
+ * a parseable payload from an allowed caller — we never 4xx the network
+ * operator; mismatches are recorded as unverified attestations, not
+ * transport errors.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getStore, StorageUnavailableError } from "../../../lib/store.js";
 import { dispatch, eventFor } from "../../../lib/webhooks.js";
 import type { C2BCallback } from "../../../lib/types.js";
+import { callerIp, allowlistAllows } from "../../../lib/net.js";
+import { resignAttestation } from "../../../lib/attest.js";
 
 function maskMsisdn(msisdn: string): string {
   if (msisdn.length <= 6) return "***";
@@ -21,11 +35,22 @@ function maskMsisdn(msisdn: string): string {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "method not allowed" });
+
+  const allowlist = process.env.MPESA_CALLBACK_ALLOWLIST ?? "";
+  const ip = callerIp(req);
+  if (!allowlistAllows(allowlist, ip)) {
+    console.warn("C2B callback rejected: caller outside MPESA_CALLBACK_ALLOWLIST", { ip });
+    return res.status(403).json({ error: "forbidden" });
+  }
+  if (!allowlist.trim()) {
+    console.warn("C2B callback accepted without source check (MPESA_CALLBACK_ALLOWLIST is empty)");
+  }
+
   const cb = req.body as Partial<C2BCallback> | undefined;
 
-  const txnId = cb?.TransactionID;
-  const amount = Number(cb?.TransactionAmount);
-  const billRef = cb?.BillRefNumber;
+  const txnId = cb?.TransID ? String(cb.TransID) : "";
+  const amount = Number(cb?.TransAmount);
+  const billRef = cb?.BillRefNumber ? String(cb.BillRefNumber) : "";
   if (!txnId || !Number.isFinite(amount) || !billRef) {
     // Unparseable — still ack Safaricom, but nothing to match.
     return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted" });
@@ -51,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expectedAmount = Number(evidence.expectedAmount);
   const expectedRecipient = String(evidence.expectedRecipient ?? "");
   const sender = cb?.MSISDN ? maskMsisdn(String(cb.MSISDN)) : undefined;
-  const txnTime = cb?.TransactionTime ? String(cb.TransactionTime) : undefined;
+  const txnTime = cb?.TransTime ? String(cb.TransTime) : undefined;
 
   let status: "verified" | "unverified" = "verified";
   let reasonCode = "MATCHED";
@@ -76,7 +101,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const updated = await store.updateStatus(open.id, {
+  // Re-sign: the attestation's payload changed, so its old signature+hash
+  // would fail verifyAttestation. resignAttestation keeps id/signedAt/prevHash.
+  const completed = resignAttestation(open, {
     status,
     reasonCode,
     reason,
@@ -88,6 +115,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transactionTime: txnTime,
       safaricomConfirmed: true,
     },
+  });
+  const updated = await store.updateStatus(completed.id, {
+    status: completed.status,
+    reasonCode: completed.reasonCode,
+    reason: completed.reason,
+    evidence: completed.evidence,
+    signature: completed.signature,
+    hash: completed.hash,
   });
 
   if (updated) {

@@ -11,7 +11,7 @@ process.env.ED25519_PRIVATE_KEY_PEM = kp.privateKey.export({ type: "pkcs8", form
 process.env.ED25519_PUBLIC_KEY_PEM = kp.publicKey.export({ type: "spki", format: "pem" }) as string;
 
 import { InMemoryStore } from "../lib/store.js";
-import { issueAttestation } from "../lib/attest.js";
+import { completeAttestation, issueAttestation } from "../lib/attest.js";
 import { verifyAttestation } from "../lib/sign.js";
 
 test("issues a hash-chained, verifiable attestation", async () => {
@@ -54,4 +54,47 @@ test("tampering breaks verification", async () => {
   });
   const tampered = { ...att, reason: "edited by attacker" };
   assert.equal(verifyAttestation(tampered), false);
+});
+
+test("completes a pending attestation by appending one linked chain entry", async () => {
+  const store = new InMemoryStore();
+  const pending = await issueAttestation(store, { kind: "person", id: "buyer-2" }, {
+    type: "payment",
+    status: "pending",
+    reasonCode: "PENDING_CALLBACK",
+    reason: "awaiting callback",
+    evidence: { orderRef: "order-2" },
+  });
+  const intervening = await issueAttestation(store, { kind: "person", id: "buyer-3" }, {
+    type: "record",
+    status: "verified",
+    reasonCode: "VERIFIED",
+    reason: "intervening",
+    evidence: {},
+  });
+
+  const results = await Promise.all([
+    completeAttestation(store, pending, {
+      status: "verified",
+      reasonCode: "MATCHED",
+      reason: "payment matched",
+      evidence: { orderRef: "order-2" },
+    }),
+    completeAttestation(store, pending, {
+      status: "verified",
+      reasonCode: "MATCHED",
+      reason: "duplicate callback",
+      evidence: { orderRef: "order-2" },
+    }),
+  ]);
+  const completed = results.find((result) => result !== null);
+
+  assert.equal(results.filter(Boolean).length, 1);
+  assert.ok(completed);
+  assert.notEqual(completed.id, pending.id);
+  assert.equal(completed.prevHash, intervening.hash);
+  assert.equal(completed.evidence.supersedesAttestationId, pending.id);
+  assert.ok(verifyAttestation(pending));
+  assert.ok(verifyAttestation(completed));
+  assert.equal((await store.getById(pending.id))?.status, "pending");
 });

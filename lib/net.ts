@@ -29,24 +29,23 @@ export function cidrContains(cidr: string, ip: string): boolean {
   return (baseInt & mask) === (ipInt & mask);
 }
 
-/** Best-effort caller IP: first X-Forwarded-For hop, else the socket address. */
+/** Vercel-authenticated client IP, or the socket address outside Vercel. */
 export function callerIp(req: {
   headers: Record<string, string | string[] | undefined>;
   socket?: { remoteAddress?: string };
 }): string {
-  const fwd = req.headers["x-forwarded-for"];
-  const raw = Array.isArray(fwd) ? fwd[0] : fwd;
+  const forwarded = req.headers["x-vercel-forwarded-for"];
+  const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const first = (raw ?? "").split(",")[0].trim();
   return first || req.socket?.remoteAddress?.trim() || "";
 }
 
 /**
- * Allowlist gate. A blank allowlist returns true (fail-open); the call site
- * is responsible for warning. A configured allowlist returns true only when
- * the caller IP matches one of its comma-separated IPs/CIDRs.
+ * Allowlist gate. A blank allowlist always denies; configured entries are
+ * comma-separated IPs/CIDRs.
  */
 export function allowlistAllows(allowlist: string, ip: string): boolean {
-  if (!allowlist.trim()) return true;
+  if (!allowlist.trim()) return false;
   return allowlist
     .split(",")
     .map((s) => s.trim())

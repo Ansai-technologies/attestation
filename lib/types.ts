@@ -73,12 +73,16 @@ export interface WebhookRegistration {
   events: WebhookEvent[];
 }
 
-/** Safaricom C2B confirmation payload (subset we consume). */
+/**
+ * Safaricom C2B confirmation payload (subset we consume).
+ * Field names follow Daraja exactly: TransID / TransTime / TransAmount.
+ * (TransAmount arrives as a string, e.g. "100.00".)
+ */
 export interface C2BCallback {
   TransactionType: string;
-  TransactionID: string;
-  TransactionTime: string;
-  TransactionAmount: number;
+  TransID: string;
+  TransTime: string;
+  TransAmount: number | string;
   BusinessShortCode: string;
   BillRefNumber: string;
   MSISDN: string;

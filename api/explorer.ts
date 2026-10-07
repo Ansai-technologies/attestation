@@ -74,7 +74,7 @@ const PAGE = `<!DOCTYPE html>
 </div>
 <script>
 function esc(s){ return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
-function short(s){ s = String(s); return s.length > 24 ? s.slice(0, 12) + "\u2026" + s.slice(-8) : s; }
+function short(s){ s = String(s); return s.length > 24 ? s.slice(0, 12) + "…" + s.slice(-8) : s; }
 function pill(status){
   var cls = status === "verified" ? "verified" : status === "pending" ? "pending" : "unverified";
   return '<span class="pill ' + cls + '">' + esc(status) + "</span>";
@@ -84,11 +84,11 @@ function field(k, v, mono){
 }
 function renderDetail(a){
   var sig = a.verified
-    ? '<span class="sig ok">\u2713 signature valid</span>'
-    : '<span class="sig bad">\u2717 signature INVALID</span>';
+    ? '<span class="sig ok">✓ signature valid</span>'
+    : '<span class="sig bad">✗ signature INVALID</span>';
   var prev = a.prevHash === "GENESIS"
-    ? '<span class="hint">Genesis \u2014 first record in the chain</span>'
-    : '<a onclick="loadByHash(\'' + esc(a.prevHash) + '\')">\u2190 ' + esc(short(a.prevHash)) + "</a>";
+    ? '<span class="hint">Genesis — first record in the chain</span>'
+    : '<a data-h="' + esc(a.prevHash) + '" onclick="loadByHash(this.dataset.h)">← ' + esc(short(a.prevHash)) + "</a>";
   var ev = esc(JSON.stringify(a.evidence, null, 2));
   document.getElementById("detail").innerHTML =
     '<div class="card"><div class="cardhead">' + pill(a.status) + sig
@@ -135,8 +135,8 @@ function loadRecent(){
     for (var i = 0; i < rows.length; i++){
       var a = rows[i];
       html += '<div class="lrow"><span class="dot ' + esc(a.status) + '"></span>'
-        + '<a class="lid" onclick="loadById(\'' + esc(a.id) + '\')">' + esc(a.id) + "</a>"
-        + '<span class="hint">' + esc(a.type) + " \u00b7 " + esc(a.reasonCode) + "</span>"
+        + '<a data-id="' + esc(a.id) + '" class="lid" onclick="loadById(this.dataset.id)">' + esc(a.id) + "</a>"
+        + '<span class="hint">' + esc(a.type) + " · " + esc(a.reasonCode) + "</span>"
         + '<span class="ltime">' + esc(new Date(a.signedAt).toLocaleString()) + "</span></div>";
     }
     document.getElementById("recent").innerHTML = html;

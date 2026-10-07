@@ -16,6 +16,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { AttestationRequest, PaymentRequest } from "../../lib/types.js";
 import { issueAttestation } from "../../lib/attest.js";
 import { getStore, StorageUnavailableError } from "../../lib/store.js";
+import { verifyAttestation } from "../../lib/sign.js";
 import { verifyPaymentByLookup } from "../../lib/daraja.js";
 import { dispatch, eventFor } from "../../lib/webhooks.js";
 
@@ -40,6 +41,32 @@ function validatePayment(p: unknown): p is PaymentRequest {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // --- GET: read-only access for the explorer --------------------------------
+  // ?hash=<sha256> → the single attestation with that chain hash (chain walk)
+  // ?limit=<n>     → most recent attestations, newest first (default 10, max 50)
+  if (req.method === "GET") {
+    let store;
+    try {
+      store = getStore();
+    } catch (e) {
+      if (e instanceof StorageUnavailableError) return bad(res, e.status, e.message);
+      throw e;
+    }
+    const withVerified = (att: Parameters<typeof verifyAttestation>[0]) => ({
+      ...att,
+      verified: verifyAttestation(att),
+    });
+    const hash = typeof req.query.hash === "string" ? req.query.hash : undefined;
+    if (hash) {
+      const att = await store.findByHash(hash);
+      if (!att) return bad(res, 404, "attestation not found");
+      return res.status(200).json(withVerified(att));
+    }
+    const rawLimit = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : NaN;
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 50) : 10;
+    const atts = await store.recent(limit);
+    return res.status(200).json({ attestations: atts.map(withVerified) });
+  }
   if (req.method !== "POST") return bad(res, 405, "method not allowed");
   const body = req.body as Partial<AttestationRequest> | undefined;
   if (!body || !body.type || !body.subject) {

@@ -5,6 +5,10 @@
     {
       "source": "/status",
       "destination": "/api/status"
+    },
+    {
+      "source": "/explorer",
+      "destination": "/api/explorer"
     }
   ]
 }

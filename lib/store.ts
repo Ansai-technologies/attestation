@@ -52,6 +52,8 @@ export class StorageUnavailableError extends Error {
 export interface AttestationStore {
   latestHash(): Promise<string>;
   recentHashes(limit: number): Promise<Array<{ hash: string; prevHash: string }>>;
+  findByHash(hash: string): Promise<Attestation | null>;
+  recent(limit: number): Promise<Attestation[]>;
   insert(att: Attestation, subject: Subject): Promise<void>;
   getById(id: string): Promise<Attestation | null>;
   findByTransactionCode(code: string): Promise<Attestation[]>;
@@ -88,6 +90,24 @@ export class SupabaseStore implements AttestationStore {
       .limit(limit);
     if (error) throw error;
     return (data ?? []).map((r) => ({ hash: r.hash as string, prevHash: r.prev_hash as string }));
+  }
+  async findByHash(hash: string): Promise<Attestation | null> {
+    const { data, error } = await this.client
+      .from("attestations")
+      .select("*")
+      .eq("hash", hash)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? fromRow(data as Record<string, unknown>) : null;
+  }
+  async recent(limit: number): Promise<Attestation[]> {
+    const { data, error } = await this.client
+      .from("attestations")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []).map((r) => fromRow(r as Record<string, unknown>));
   }
 
   async insert(att: Attestation, subject: Subject): Promise<void> {
@@ -157,6 +177,12 @@ export class InMemoryStore implements AttestationStore {
       .slice(-limit)
       .reverse()
       .map((a) => ({ hash: a.hash, prevHash: a.prevHash }));
+  }
+  async findByHash(hash: string): Promise<Attestation | null> {
+    return this.order.find((a) => a.hash === hash) ?? null;
+  }
+  async recent(limit: number): Promise<Attestation[]> {
+    return this.order.slice(-limit).reverse();
   }
   async insert(att: Attestation, _subject: Subject): Promise<void> {
     this.atts.set(att.id, att);

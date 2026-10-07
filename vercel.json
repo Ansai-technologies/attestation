@@ -3,6 +3,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/api/status"
+    },
+    {
       "source": "/status",
       "destination": "/api/status"
     },

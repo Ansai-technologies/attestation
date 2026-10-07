@@ -72,6 +72,25 @@ rewriting history would require rewriting everyone else's records too.
    for existing integrations).
 5. Ship the tenant portal, then the ops console.
 
+
+### Portal patterns (reference: Daraja, Stripe, Twilio)
+
+Every great developer portal shares five patterns. Ours follows them:
+
+1. **Apps are the unit** (Daraja's "My Apps"): tenants create apps; each app
+   gets its own API key and credentials. Never one key per account.
+2. **Keys with a paper trail** (Daraja Keys tab; Stripe test/live keys):
+   issued date, expiry, revoke button, test-vs-live split per key.
+3. **Webhooks configured in-dashboard** (Stripe Developers → Webhooks): add
+   endpoint, pick events, signing secret shown once. No curl required.
+4. **Logs you can inspect** (Twilio debugger; Stripe request logs): every API
+   call traceable; the explorer is the drill-down into any single record.
+5. **Docs + sandbox next to the keys** (Daraja Test Credentials): contract
+   docs and a try-it console inside the portal, with ready-made sandbox values.
+
+Patterns 1, 2, 3 and 5 belong to the tenant portal (v0.2). Pattern 4 is the
+ops console (internal). `/status` and `/explorer` are its first halves.
+
 ## Open decisions (not yet taken)
 - Custodial keys vs bring-your-own-key → start custodial, BYOK later.
 - Billing/metering per attestation → out of v0.2 scope.

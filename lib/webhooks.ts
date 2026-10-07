@@ -114,6 +114,9 @@ export async function dispatch(
   const hooks: WebhookRegistration[] = (await store.listWebhooks()).filter((h) =>
     h.events.includes(event),
   );
+  if (hooks.length > 0 && !process.env.ATTESTATION_WEBHOOK_SECRET) {
+    console.error("Webhook dispatch skipped: ATTESTATION_WEBHOOK_SECRET is not configured");
+  }
   return Promise.all(hooks.map((h) => postWithRetry(h.url, event, attestation)));
 }
 

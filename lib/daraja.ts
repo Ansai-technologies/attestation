@@ -12,6 +12,14 @@ import type { PaymentRequest } from "./types.js";
 
 const SANDBOX_BASE = "https://sandbox.safaricom.co.ke";
 
+/** Parse Daraja's Kenya-local 14-digit timestamp (EAT, UTC+03:00). */
+export function parseDarajaTransTime(value: string): Date {
+  if (!/^\d{14}$/.test(value)) return new Date(Number.NaN);
+  return new Date(
+    `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(8, 10)}:${value.slice(10, 12)}:${value.slice(12, 14)}+03:00`,
+  );
+}
+
 function darajaEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`${name} is not configured (see .env.example)`);

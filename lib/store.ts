@@ -55,7 +55,7 @@ export interface AttestationStore {
   getById(id: string): Promise<Attestation | null>;
   findByTransactionCode(code: string): Promise<Attestation[]>;
   findOpenByOrderRef(orderRef: string): Promise<Attestation | null>;
-  updateStatus(id: string, patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">): Promise<Attestation | null>;
+  appendCompletion(parentId: string, attestation: Attestation): Promise<Attestation | null>;
   registerWebhook(reg: WebhookRegistration): Promise<void>;
   listWebhooks(): Promise<WebhookRegistration[]>;
 }
@@ -110,18 +110,14 @@ export class SupabaseStore implements AttestationStore {
     return data ? fromRow(data as Record<string, unknown>) : null;
   }
 
-  async updateStatus(
-    id: string,
-    patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">,
-  ): Promise<Attestation | null> {
-    const { data, error } = await this.client
-      .from("attestations")
-      .update({ status: patch.status, reason_code: patch.reasonCode, reason: patch.reason, evidence: patch.evidence })
-      .eq("id", id)
-      .select("*")
-      .maybeSingle();
+  async appendCompletion(parentId: string, attestation: Attestation): Promise<Attestation | null> {
+    const { data, error } = await this.client.rpc("append_attestation_completion", {
+      p_parent_id: parentId,
+      p_attestation: attestation,
+    });
     if (error) throw error;
-    return data ? fromRow(data as Record<string, unknown>) : null;
+    const row = Array.isArray(data) ? data[0] : data;
+    return row ? fromRow(row as Record<string, unknown>) : null;
   }
 
   async registerWebhook(reg: WebhookRegistration): Promise<void> {
@@ -159,17 +155,19 @@ export class InMemoryStore implements AttestationStore {
   async findOpenByOrderRef(orderRef: string): Promise<Attestation | null> {
     return this.order.find((a) => a.evidence?.orderRef === orderRef && a.status === "pending") ?? null;
   }
-  async updateStatus(
-    id: string,
-    patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">,
-  ): Promise<Attestation | null> {
-    const att = this.atts.get(id);
-    if (!att) return null;
-    const updated = { ...att, ...patch };
-    this.atts.set(id, updated);
-    const idx = this.order.findIndex((a) => a.id === id);
-    if (idx >= 0) this.order[idx] = updated;
-    return updated;
+  async appendCompletion(parentId: string, attestation: Attestation): Promise<Attestation | null> {
+    const parent = this.atts.get(parentId);
+    if (
+      !parent ||
+      parent.status !== "pending" ||
+      attestation.evidence.supersedesAttestationId !== parentId ||
+      this.order.some((entry) => entry.evidence.supersedesAttestationId === parentId)
+    ) {
+      return null;
+    }
+    this.atts.set(attestation.id, attestation);
+    this.order.push(attestation);
+    return attestation;
   }
   async registerWebhook(reg: WebhookRegistration): Promise<void> {
     this.hooks.push(reg);

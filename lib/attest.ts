@@ -47,3 +47,29 @@ export async function issueAttestation(
   await store.insert(attestation, subject);
   return attestation;
 }
+
+/** Append a signed completion that explicitly supersedes a pending entry. */
+export async function completeAttestation(
+  store: AttestationStore,
+  current: Attestation,
+  patch: Pick<Attestation, "status" | "reasonCode" | "reason" | "evidence">,
+): Promise<Attestation | null> {
+  const evidence = { ...patch.evidence, supersedesAttestationId: current.id };
+  const base: Omit<Attestation, "signature" | "hash"> = {
+    id: newAttestationId(),
+    type: current.type,
+    status: patch.status,
+    reasonCode: patch.reasonCode,
+    reason: patch.reason,
+    evidence,
+    signedAt: new Date().toISOString(),
+    prevHash: await store.latestHash(),
+  };
+  const canonical = signablePayload(base);
+  const attestation: Attestation = {
+    ...base,
+    signature: signCanonical(canonical),
+    hash: chainHash(base.prevHash, canonical),
+  };
+  return store.appendCompletion(current.id, attestation);
+}

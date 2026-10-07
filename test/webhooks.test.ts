@@ -37,17 +37,50 @@ test("does not follow webhook redirects", async () => {
   } as unknown as AttestationStore;
   const attestation = {} as Attestation;
   const originalFetch = globalThis.fetch;
+  const originalSecret = process.env.ATTESTATION_WEBHOOK_SECRET;
   let redirectMode: string | undefined;
+  let signature: string | undefined;
 
   globalThis.fetch = async (_input, init) => {
     redirectMode = init?.redirect;
+    signature = (init?.headers as Record<string, string>)["X-Tuma-Signature"];
     return new Response(null, { status: 302 });
   };
+  process.env.ATTESTATION_WEBHOOK_SECRET = "test-webhook-secret";
   try {
     const [result] = await dispatch(store, COMPLETED, attestation);
     assert.equal(redirectMode, "manual");
+    assert.equal(signature, "d7cc55d7e4b30a3aea890d7c56af5f3b5510c54f56dec25b0439ce5d168d4640");
     assert.equal(result.ok, false);
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalSecret === undefined) delete process.env.ATTESTATION_WEBHOOK_SECRET;
+    else process.env.ATTESTATION_WEBHOOK_SECRET = originalSecret;
+  }
+});
+
+test("logs missing webhook secret once per dispatch", async () => {
+  const registrations: WebhookRegistration[] = [
+    { url: "https://hooks.example/one", events: [COMPLETED] },
+    { url: "https://hooks.example/two", events: [COMPLETED] },
+  ];
+  const store = {
+    listWebhooks: async () => registrations,
+  } as unknown as AttestationStore;
+  const originalSecret = process.env.ATTESTATION_WEBHOOK_SECRET;
+  const originalConsoleError = console.error;
+  const logged: unknown[][] = [];
+  delete process.env.ATTESTATION_WEBHOOK_SECRET;
+  console.error = (...args: unknown[]) => logged.push(args);
+  try {
+    const results = await dispatch(store, COMPLETED, {} as Attestation);
+    assert.equal(results.length, 2);
+    assert.ok(results.every((result) => !result.ok && result.error?.includes("not configured")));
+    assert.equal(logged.length, 1);
+    assert.match(String(logged[0][0]), /ATTESTATION_WEBHOOK_SECRET is not configured/);
+  } finally {
+    console.error = originalConsoleError;
+    if (originalSecret === undefined) delete process.env.ATTESTATION_WEBHOOK_SECRET;
+    else process.env.ATTESTATION_WEBHOOK_SECRET = originalSecret;
   }
 });

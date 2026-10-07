@@ -28,16 +28,48 @@ export function chainHash(prevHash: string, canonicalPayload: string): string {
   return createHash("sha256").update(prevHash + canonicalPayload, "utf8").digest("hex");
 }
 
+/**
+ * Paste-proof PEM ingestion.
+ *
+ * Secrets pasted through dashboards, terminals and editors arrive with
+ * creative newline mangling (real LF/CRLF, literal \n sequences, or newlines
+ * collapsed to spaces). Rebuild a canonical PEM from the headers plus the
+ * base64 body whenever both are present; otherwise throw a descriptive error
+ * carrying non-secret metadata only, so the next failure names itself
+ * instead of surfacing a raw OpenSSL decoder error.
+ */
+function normalizePem(raw: string, label: string, expectedKind: string): string {
+  const text = raw.replace(/\\n/g, "\n");
+  const m = text.match(/-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/);
+  if (!m) {
+    const newlines = (text.match(/\n/g) || []).length;
+    throw new Error(
+      `${label}: no PEM block found (length=${text.length}, newlines=${newlines}). ` +
+        `Expected "-----BEGIN ${expectedKind}-----" … "-----END ${expectedKind}-----".`,
+    );
+  }
+  if (m[1] !== expectedKind) {
+    throw new Error(
+      `${label}: header is "-----BEGIN ${m[1]}-----", expected "-----BEGIN ${expectedKind}-----" — the keys may be swapped.`,
+    );
+  }
+  const body = m[2].replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9+/=]+$/.test(body) || body.length < 16) {
+    throw new Error(`${label}: PEM body is not valid base64 (length=${body.length}).`);
+  }
+  return `-----BEGIN ${m[1]}-----\n${body}\n-----END ${m[1]}-----\n`;
+}
+
 function privateKeyPem(): string {
   const pem = process.env.ED25519_PRIVATE_KEY_PEM;
   if (!pem) throw new Error("ED25519_PRIVATE_KEY_PEM is not configured");
-  return pem.replace(/\\n/g, "\n");
+  return normalizePem(pem, "ED25519_PRIVATE_KEY_PEM", "PRIVATE KEY");
 }
 
 function publicKeyPem(): string {
   const pem = process.env.ED25519_PUBLIC_KEY_PEM;
   if (!pem) throw new Error("ED25519_PUBLIC_KEY_PEM is not configured");
-  return pem.replace(/\\n/g, "\n");
+  return normalizePem(pem, "ED25519_PUBLIC_KEY_PEM", "PUBLIC KEY");
 }
 
 export function signCanonical(canonicalPayload: string): string {

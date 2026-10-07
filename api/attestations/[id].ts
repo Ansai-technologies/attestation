@@ -1,6 +1,7 @@
 /** GET /attestations/{id} — retrieve an attestation. Anyone can re-verify the signature. */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getStore, StorageUnavailableError } from "../../lib/store.js";
+import { verifyAttestation } from "../../lib/sign.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return res.status(405).json({ error: "method not allowed" });
@@ -18,5 +19,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const att = await store.getById(id);
   if (!att) return res.status(404).json({ error: `attestation ${id} not found` });
-  return res.status(200).json(att);
+  return res.status(200).json({ ...att, verified: verifyAttestation(att) });
 }

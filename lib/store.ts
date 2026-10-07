@@ -27,7 +27,7 @@ function toRow(att: Attestation, subject: Subject): Record<string, unknown> {
   };
 }
 
-function fromRow(row: Record<string, unknown>): Attestation {
+export function fromRow(row: Record<string, unknown>): Attestation {
   return {
     id: row.id as string,
     type: row.type as Attestation["type"],
@@ -35,7 +35,10 @@ function fromRow(row: Record<string, unknown>): Attestation {
     reasonCode: row.reason_code as string,
     reason: row.reason as string,
     evidence: (row.evidence as Record<string, unknown>) ?? {},
-    signedAt: (row.signed_at as string) ?? (row.created_at as string),
+    // Postgres renders timestamptz as "+00:00", but signatures were computed over
+    // the Z-form ISO string at issuance. Normalize so database round-trips
+    // verify byte-identically; without this every DB-backed read fails verification.
+    signedAt: new Date((row.signed_at as string) ?? (row.created_at as string)).toISOString(),
     signature: row.signature as string,
     prevHash: row.prev_hash as string,
     hash: row.hash as string,

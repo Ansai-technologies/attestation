@@ -51,6 +51,7 @@ export class StorageUnavailableError extends Error {
 
 export interface AttestationStore {
   latestHash(): Promise<string>;
+  recentHashes(limit: number): Promise<Array<{ hash: string; prevHash: string }>>;
   insert(att: Attestation, subject: Subject): Promise<void>;
   getById(id: string): Promise<Attestation | null>;
   findByTransactionCode(code: string): Promise<Attestation[]>;
@@ -78,6 +79,15 @@ export class SupabaseStore implements AttestationStore {
       .maybeSingle();
     if (error) throw error;
     return (data?.hash as string) ?? "GENESIS";
+  }
+  async recentHashes(limit: number): Promise<Array<{ hash: string; prevHash: string }>> {
+    const { data, error } = await this.client
+      .from("attestations")
+      .select("hash, prev_hash")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({ hash: r.hash as string, prevHash: r.prev_hash as string }));
   }
 
   async insert(att: Attestation, subject: Subject): Promise<void> {
@@ -141,6 +151,12 @@ export class InMemoryStore implements AttestationStore {
   async latestHash(): Promise<string> {
     const last = this.order[this.order.length - 1];
     return last ? last.hash : "GENESIS";
+  }
+  async recentHashes(limit: number): Promise<Array<{ hash: string; prevHash: string }>> {
+    return this.order
+      .slice(-limit)
+      .reverse()
+      .map((a) => ({ hash: a.hash, prevHash: a.prevHash }));
   }
   async insert(att: Attestation, _subject: Subject): Promise<void> {
     this.atts.set(att.id, att);

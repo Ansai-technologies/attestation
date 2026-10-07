@@ -2,10 +2,17 @@
  * Webhook dispatcher. Fires `attestation.completed` / `attestation.failed`
  * to every registered callback URL for that event. One retry on failure;
  * failures are logged, never thrown — dispatch must not break attestation.
+ *
+ * Every dispatch is signed: HMAC-SHA256 of the raw JSON body, hex-encoded,
+ * in the `X-Tuma-Signature` header, keyed by ATTESTATION_WEBHOOK_SECRET.
+ * Receivers (e.g. Tuma's /api/webhooks/attestation) verify this signature
+ * and reject unsigned events with 401 — so an unset secret means dispatch
+ * is skipped rather than sending events that can never be accepted.
  */
 import type { Attestation, WebhookEvent, WebhookRegistration } from "./types.js";
 import type { AttestationStore } from "./store.js";
 import { isIP } from "node:net";
+import { createHmac } from "node:crypto";
 
 export const COMPLETED: WebhookEvent = "attestation.completed";
 export const FAILED: WebhookEvent = "attestation.failed";
@@ -116,11 +123,26 @@ async function postWithRetry(
   attestation: Attestation,
 ): Promise<DispatchResult> {
   const body = JSON.stringify({ event, attestation });
+  const secret = process.env.ATTESTATION_WEBHOOK_SECRET;
+  if (!secret) {
+    return {
+      url,
+      ok: false,
+      error:
+        "ATTESTATION_WEBHOOK_SECRET is not configured — dispatch skipped. " +
+        "Set it to the shared secret (same value as the receiver's) to enable signed dispatch.",
+    };
+  }
+  const signature = createHmac("sha256", secret).update(body, "utf8").digest("hex");
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Attestation-Event": event },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Attestation-Event": event,
+          "X-Tuma-Signature": signature,
+        },
         body,
         signal: AbortSignal.timeout(10_000),
         redirect: "manual",

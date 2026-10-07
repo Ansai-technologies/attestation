@@ -71,6 +71,10 @@ re-verify the signature with the public key and `lib/sign.ts`'s
 
 ## POST /webhooks — register a callback URL
 
+Provide `WEBHOOK_ADMIN_SECRET` as a bearer token in the `Authorization` header. Requests with a
+missing or invalid bearer token return `401`; if `WEBHOOK_ADMIN_SECRET` is not
+configured, registration is disabled and returns `503`.
+
 ```json
 { "url": "https://your-app.example/hooks/attestations", "events": ["attestation.completed", "attestation.failed"] }
 ```

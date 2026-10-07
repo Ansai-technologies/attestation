@@ -112,3 +112,23 @@ export function verifyAttestation(att: Attestation): boolean {
     att.hash === chainHash(att.prevHash, canonical)
   );
 }
+
+/**
+ * Non-throwing signing readiness probe for the /api/health endpoint.
+ * Signs a fixed probe payload with the private key and verifies it against
+ * the public key — exercising the exact issuance path and catching
+ * mismatched key pairs. Returns ok/detail instead of raising, and exposes
+ * no secret material.
+ */
+export function signingReady(): { ok: boolean; detail: string } {
+  try {
+    const probe = Buffer.from("ansai-trust-engine-health-probe", "utf8");
+    const sig = cryptoSign(null, probe, privateKeyPem());
+    const verified = cryptoVerify(null, probe, publicKeyPem(), sig);
+    return verified
+      ? { ok: true, detail: "Ed25519 sign+verify round-trip OK" }
+      : { ok: false, detail: "probe signature did not verify against the public key (mismatched key pair?)" };
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : String(e) };
+  }
+}

@@ -11,6 +11,8 @@ their records through `subject` (each product uses its own subject
 kinds/ids). The trust claim is **"Ansai vouches for this record"** — correct
 while every face of the engine belongs to us.
 
+Live at `attestation.ansaitechnologies.co.ke` (status page at the root, explorer at `/explorer`).
+
 Nothing about v0.1 blocks the products: they can issue attestations today.
 
 ## Why multi-tenancy, and when

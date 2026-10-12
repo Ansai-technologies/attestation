@@ -106,6 +106,10 @@ export interface DispatchResult {
 }
 
 /** Fire event to all matching webhooks; resolves with per-URL results. */
+// NOTE: callers must await dispatch(). Fire-and-forget (void dispatch(...)) lets the
+// serverless runtime freeze the function after the response is sent, silently
+// dropping webhook deliveries. Awaiting keeps the invocation alive until the
+// (already timeout-bounded) POST completes; dispatch itself never throws.
 export async function dispatch(
   store: AttestationStore,
   event: WebhookEvent,

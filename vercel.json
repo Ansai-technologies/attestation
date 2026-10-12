@@ -13,6 +13,18 @@
     {
       "source": "/explorer",
       "destination": "/api/explorer"
+    },
+    {
+      "source": "/attestations",
+      "destination": "/api/attestations"
+    },
+    {
+      "source": "/attestations/:path*",
+      "destination": "/api/attestations/:path*"
+    },
+    {
+      "source": "/webhooks",
+      "destination": "/api/webhooks"
     }
   ]
 }

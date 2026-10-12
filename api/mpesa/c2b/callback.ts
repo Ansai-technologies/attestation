@@ -119,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   if (completed) {
     const event = eventFor(completed.status);
-    if (event) void dispatch(store, event, completed);
+    if (event) await dispatch(store, event, completed);
   }
   return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted" });
 }

@@ -1,6 +1,6 @@
 /**
  * POST /webhooks — register a callback URL for attestation.completed /
- * attestation.failed events. Payload delivered: { event, attestation }.
+ * attestation.failed events. Payload delivered: { event, eventId, attestation }.
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getStore, StorageUnavailableError } from "../../lib/store.js";

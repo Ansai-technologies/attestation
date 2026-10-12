@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       evidence: { hash: body.record.hash, recordedBy: body.record.recordedBy },
     });
     const event = eventFor(att.status);
-    if (event) void dispatch(store, event, att);
+    if (event) await dispatch(store, event, att);
     return res.status(201).json(att);
   }
 
@@ -136,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
     const event = eventFor(att.status);
-    if (event) void dispatch(store, event, att);
+    if (event) await dispatch(store, event, att);
     return res.status(201).json(att);
   }
 
@@ -170,7 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       });
       const event = eventFor(att.status);
-      if (event) void dispatch(store, event, att);
+      if (event) await dispatch(store, event, att);
       return res.status(201).json(att);
     }
     if (!verdict.matchedAmount) {
@@ -187,7 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       });
       const event = eventFor(att.status);
-      if (event) void dispatch(store, event, att);
+      if (event) await dispatch(store, event, att);
       return res.status(201).json(att);
     }
     if (!verdict.matchedRecipient) {
@@ -203,7 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       });
       const event = eventFor(att.status);
-      if (event) void dispatch(store, event, att);
+      if (event) await dispatch(store, event, att);
       return res.status(201).json(att);
     }
     const att = await issueAttestation(store, subject, {
@@ -220,7 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
     const event = eventFor(att.status);
-    if (event) void dispatch(store, event, att);
+    if (event) await dispatch(store, event, att);
     return res.status(201).json(att);
   } catch (e) {
     // Daraja unreachable / misconfigured: degrade to pending rather than fail.

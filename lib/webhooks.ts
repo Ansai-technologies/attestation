@@ -129,7 +129,10 @@ async function postWithRetry(
   event: WebhookEvent,
   attestation: Attestation,
 ): Promise<DispatchResult> {
-  const body = JSON.stringify({ event, attestation });
+  // Stable idempotency key: the receiver (Tuma) claims events by eventId, so the
+  // same (event, attestation) must always produce the same id across retries.
+  const eventId = `${event}:${attestation.id}`;
+  const body = JSON.stringify({ event, eventId, attestation });
   const secret = process.env.ATTESTATION_WEBHOOK_SECRET;
   if (!secret) {
     return {

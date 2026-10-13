@@ -78,6 +78,29 @@ export interface WebhookRegistration {
  * Field names follow Daraja exactly: TransID / TransTime / TransAmount.
  * (TransAmount arrives as a string, e.g. "100.00".)
  */
+/**
+ * A C2B confirmation Safaricom delivered to us, filed in the confirmation
+ * ledger (mpesa_confirmations): the engine's own copy of the receipt.
+ * Payments are judged against it first — in the real flow the buyer pays
+ * (receipt lands here) before they submit the transaction code.
+ */
+export interface MpesaConfirmation {
+  /** Daraja TransID — globally unique per transaction */
+  transId: string;
+  amount: number;
+  /** Till / paybill that received the money */
+  businessShortCode: string;
+  /** Order reference quoted by the payer */
+  billRefNumber: string;
+  msisdn?: string;
+  /** Daraja TransTime, format YYYYMMDDHHmmss (EAT) */
+  transTime?: string;
+  /** The callback payload, exactly as delivered */
+  raw: Record<string, unknown>;
+  /** ISO timestamp of when the engine received the callback */
+  receivedAt: string;
+}
+
 export interface C2BCallback {
   TransactionType: string;
   TransID: string;

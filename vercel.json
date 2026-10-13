@@ -25,6 +25,10 @@
     {
       "source": "/webhooks",
       "destination": "/api/webhooks"
+    },
+    {
+      "source": "/c2b/confirm",
+      "destination": "/api/mpesa/c2b/callback"
     }
   ]
 }

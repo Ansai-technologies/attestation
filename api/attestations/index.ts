@@ -3,6 +3,9 @@
  *
  * Payment flow (v0.1):
  *  - DUPLICATE: transactionCode already attested → unverified
+ *  - Confirmation ledger: Safaricom already delivered this payment's receipt
+ *    to us → judged against our own copy (MATCHED / AMOUNT_MISMATCH /
+ *    RECIPIENT_MISMATCH / STALE)
  *  - Daraja transaction-status lookup by buyer-supplied code:
  *      matched → verified / MATCHED
  *      amount mismatch → unverified / AMOUNT_MISMATCH
@@ -18,6 +21,7 @@ import { issueAttestation } from "../../lib/attest.js";
 import { getStore, StorageUnavailableError } from "../../lib/store.js";
 import { verifyAttestation } from "../../lib/sign.js";
 import { verifyPaymentByLookup } from "../../lib/daraja.js";
+import { evaluateConfirmation } from "../../lib/confirmations.js";
 import { dispatch, eventFor } from "../../lib/webhooks.js";
 
 function bad(res: VercelResponse, code: number, msg: string) {
@@ -134,6 +138,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         orderRef: payment.orderRef,
         priorAttestationId: prior[0].id,
       },
+    });
+    const event = eventFor(att.status);
+    if (event) await dispatch(store, event, att);
+    return res.status(201).json(att);
+  }
+
+  // Confirmation ledger first: if Safaricom already delivered this payment's
+  // receipt, judge the code against our own copy — no Daraja lookup needed.
+  const confirmation = await store.findConfirmationByTransId(payment.transactionCode);
+  if (confirmation) {
+    const v = evaluateConfirmation(payment, confirmation);
+    const att = await issueAttestation(store, subject, {
+      type,
+      status: v.status,
+      reasonCode: v.reasonCode,
+      reason: v.reason,
+      evidence: v.evidence,
     });
     const event = eventFor(att.status);
     if (event) await dispatch(store, event, att);

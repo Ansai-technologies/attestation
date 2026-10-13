@@ -1,7 +1,10 @@
 /**
  * POST /mpesa/c2b/callback — Safaricom C2B confirmation ingress.
  *
- * A payment is real iff Safaricom announced it. This handler matches the
+ * A payment is real iff Safaricom announced it. Every confirmation is first
+ * filed in the confirmation ledger (mpesa_confirmations) — even when no
+ * attestation is waiting — so a transaction code submitted later can be
+ * judged against our own copy of the receipt. The handler then matches the
  * confirmation to the open (pending) payment attestation by
  * BillRefNumber/orderRef + amount, appends a signed completion entry, and
  * dispatches webhooks once.
@@ -26,6 +29,7 @@ import type { C2BCallback } from "../../../lib/types.js";
 import { callerIp, allowlistAllows } from "../../../lib/net.js";
 import { completeAttestation } from "../../../lib/attest.js";
 import { parseDarajaTransTime } from "../../../lib/daraja.js";
+import { confirmationFromCallback } from "../../../lib/confirmations.js";
 
 function maskMsisdn(msisdn: string): string {
   if (msisdn.length <= 6) return "***";
@@ -70,9 +74,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted" });
   }
 
+  // File the receipt before matching: the ledger is the proof a later code
+  // submission is judged against. Filing is best-effort — a ledger failure
+  // must not break completion of an attestation that is waiting now.
+  const conf = confirmationFromCallback(cb ?? {}, new Date().toISOString());
+  if (conf) {
+    try {
+      await store.recordConfirmation(conf);
+    } catch (e) {
+      console.error("C2B confirmation could not be filed", { txnId, error: (e as Error).message });
+    }
+  }
+
   const open = await store.findOpenByOrderRef(String(billRef));
   if (!open) {
-    console.warn("C2B callback with no open attestation", { txnId, billRef, amount });
+    console.warn("C2B callback with no open attestation (filed in confirmation ledger)", { txnId, billRef, amount });
     return res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted" });
   }
 

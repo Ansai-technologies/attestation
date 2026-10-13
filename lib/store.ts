@@ -6,7 +6,7 @@
  * the API handlers surface that instead of silently running unbacked.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Attestation, Subject, WebhookEvent, WebhookRegistration } from "./types.js";
+import type { Attestation, MpesaConfirmation, Subject, WebhookEvent, WebhookRegistration } from "./types.js";
 
 function toRow(att: Attestation, subject: Subject): Record<string, unknown> {
   return {
@@ -62,6 +62,8 @@ export interface AttestationStore {
   findByTransactionCode(code: string): Promise<Attestation[]>;
   findOpenByOrderRef(orderRef: string): Promise<Attestation | null>;
   appendCompletion(parentId: string, attestation: Attestation): Promise<Attestation | null>;
+  recordConfirmation(conf: MpesaConfirmation): Promise<void>;
+  findConfirmationByTransId(transId: string): Promise<MpesaConfirmation | null>;
   registerWebhook(reg: WebhookRegistration): Promise<void>;
   listWebhooks(): Promise<WebhookRegistration[]>;
 }
@@ -153,6 +155,45 @@ export class SupabaseStore implements AttestationStore {
     return row ? fromRow(row as Record<string, unknown>) : null;
   }
 
+  async recordConfirmation(conf: MpesaConfirmation): Promise<void> {
+    // Idempotent: Safaricom may deliver the same confirmation more than once.
+    const { error } = await this.client.from("mpesa_confirmations").upsert(
+      {
+        trans_id: conf.transId,
+        amount: conf.amount,
+        business_short_code: conf.businessShortCode,
+        bill_ref_number: conf.billRefNumber,
+        msisdn: conf.msisdn ?? null,
+        trans_time: conf.transTime ?? null,
+        raw: conf.raw,
+        received_at: conf.receivedAt,
+      },
+      { onConflict: "trans_id", ignoreDuplicates: true },
+    );
+    if (error) throw error;
+  }
+
+  async findConfirmationByTransId(transId: string): Promise<MpesaConfirmation | null> {
+    const { data, error } = await this.client
+      .from("mpesa_confirmations")
+      .select("*")
+      .eq("trans_id", transId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const row = data as Record<string, unknown>;
+    return {
+      transId: row.trans_id as string,
+      amount: Number(row.amount),
+      businessShortCode: row.business_short_code as string,
+      billRefNumber: row.bill_ref_number as string,
+      msisdn: (row.msisdn as string) ?? undefined,
+      transTime: (row.trans_time as string) ?? undefined,
+      raw: (row.raw as Record<string, unknown>) ?? {},
+      receivedAt: new Date(row.received_at as string).toISOString(),
+    };
+  }
+
   async registerWebhook(reg: WebhookRegistration): Promise<void> {
     const { error } = await this.client.from("webhooks").insert({ url: reg.url, events: reg.events });
     if (error) throw error;
@@ -170,6 +211,7 @@ export class InMemoryStore implements AttestationStore {
   private atts = new Map<string, Attestation>();
   private order: Attestation[] = [];
   private hooks: WebhookRegistration[] = [];
+  private confirmations = new Map<string, MpesaConfirmation>();
 
   async latestHash(): Promise<string> {
     const last = this.order[this.order.length - 1];
@@ -213,6 +255,12 @@ export class InMemoryStore implements AttestationStore {
     this.atts.set(attestation.id, attestation);
     this.order.push(attestation);
     return attestation;
+  }
+  async recordConfirmation(conf: MpesaConfirmation): Promise<void> {
+    if (!this.confirmations.has(conf.transId)) this.confirmations.set(conf.transId, conf);
+  }
+  async findConfirmationByTransId(transId: string): Promise<MpesaConfirmation | null> {
+    return this.confirmations.get(transId) ?? null;
   }
   async registerWebhook(reg: WebhookRegistration): Promise<void> {
     this.hooks.push(reg);

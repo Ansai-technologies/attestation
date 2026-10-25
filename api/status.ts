@@ -11,7 +11,7 @@ const PAGE = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ansai Trust Engine &mdash; System Status</title>
+<title>Ansai Attest &mdash; System Status</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2048%2048%22%3E%0A%20%20%3Ctitle%3EAttestation%20Engine%20%E2%80%94%20Ansai%3C%2Ftitle%3E%0A%20%20%3Ccircle%20cx%3D%2223%22%20cy%3D%2225%22%20r%3D%2214.5%22%20fill%3D%22none%22%20stroke%3D%22%2317222C%22%20stroke-width%3D%223.2%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M16%2025.5%20L21.5%2031%20L31.5%2019.5%22%20fill%3D%22none%22%20stroke%3D%22%232563EB%22%20stroke-width%3D%223.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2236.5%22%20cy%3D%2211.5%22%20r%3D%223.4%22%20fill%3D%22none%22%20stroke%3D%22%232563EB%22%20stroke-width%3D%222.8%22%2F%3E%0A%3C%2Fsvg%3E%0A">
 <style>
   :root { color-scheme: light; }
@@ -46,7 +46,7 @@ const PAGE = `<!DOCTYPE html>
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">Ansai Trust Engine</p>
+  <p class="eyebrow">Ansai Attest</p>
   <h1>System Status</h1>
   <p class="sub">Live health of the attestation infrastructure &mdash; refreshed automatically.</p>
   <div id="banner" class="banner loading">Checking&hellip;</div>
